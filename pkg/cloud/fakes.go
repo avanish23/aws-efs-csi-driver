@@ -69,7 +69,7 @@ func (c *FakeCloudProvider) DescribeAccessPoint(ctx context.Context, accessPoint
 
 // CreateVolume calls DescribeFileSystem and then CreateAccessPoint.
 // Add file system into the map here to allow CreateVolume sanity tests to succeed.
-func (c *FakeCloudProvider) DescribeFileSystem(ctx context.Context, fileSystemId string) (fileSystem *FileSystem, err error) {
+func (c *FakeCloudProvider) DescribeFileSystemById(ctx context.Context, fileSystemId string) (fileSystem *FileSystem, err error) {
 	if fs, ok := c.fileSystems[fileSystemId]; ok {
 		return fs, nil
 	}
@@ -87,6 +87,27 @@ func (c *FakeCloudProvider) DescribeFileSystem(ctx context.Context, fileSystemId
 	}
 
 	c.mountTargets[fileSystemId] = mt
+	return fs, nil
+}
+
+func (c *FakeCloudProvider) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fileSystem *FileSystem, err error) {
+	if fs, ok := c.fileSystems[creationToken]; ok {
+		return fs, nil
+	}
+
+	fs := &FileSystem{
+		FileSystemId: creationToken,
+	}
+	c.fileSystems[creationToken] = fs
+
+	mt := &MountTarget{
+		AZName:        "us-east-1a",
+		AZId:          "mock-AZ-id",
+		MountTargetId: "fsmt-abcd1234",
+		IPAddress:     "127.0.0.1",
+	}
+
+	c.mountTargets[creationToken] = mt
 	return fs, nil
 }
 

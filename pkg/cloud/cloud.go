@@ -105,7 +105,8 @@ type Cloud interface {
 	DescribeAccessPoint(ctx context.Context, accessPointId string) (accessPoint *AccessPoint, err error)
 	FindAccessPointByClientToken(ctx context.Context, clientToken, fileSystemId string) (accessPoint *AccessPoint, err error)
 	ListAccessPoints(ctx context.Context, fileSystemId string) (accessPoints []*AccessPoint, err error)
-	DescribeFileSystem(ctx context.Context, fileSystemId string) (fs *FileSystem, err error)
+	DescribeFileSystemById(ctx context.Context, fileSystemId string) (fs *FileSystem, err error)
+	DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs *FileSystem, err error)
 	DescribeMountTargets(ctx context.Context, fileSystemId, az string) (fs *MountTarget, err error)
 }
 
@@ -321,8 +322,30 @@ func (c *cloud) ListAccessPoints(ctx context.Context, fileSystemId string) (acce
 
 	return
 }
+func (c *cloud) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs *FileSystem, err error) {
+	describeFsInput := &efs.DescribeFileSystemsInput{FileSystemId: &creationToken}
+	klog.V(5).Infof("Calling DescribeFileSystems with input: %+v", *describeFsInput)
+	res, err := c.efs.DescribeFileSystems(ctx, describeFsInput)
+	if err != nil {
+		if isAccessDenied(err) {
+			return nil, ErrAccessDenied
+		}
+		if isFileSystemNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("Describe File System failed: %v", err)
+	}
 
-func (c *cloud) DescribeFileSystem(ctx context.Context, fileSystemId string) (fs *FileSystem, err error) {
+	fileSystems := res.FileSystems
+	if len(fileSystems) == 0 || len(fileSystems) > 1 {
+		return nil, fmt.Errorf("DescribeFileSystem failed. Expected exactly 1 file system in DescribeFileSystem result. However, recevied %d file systems", len(fileSystems))
+	}
+	return &FileSystem{
+		FileSystemId: *res.FileSystems[0].FileSystemId,
+	}, nil
+}
+
+func (c *cloud) DescribeFileSystemById(ctx context.Context, fileSystemId string) (fs *FileSystem, err error) {
 	describeFsInput := &efs.DescribeFileSystemsInput{FileSystemId: &fileSystemId}
 	klog.V(5).Infof("Calling DescribeFileSystems with input: %+v", *describeFsInput)
 	res, err := c.efs.DescribeFileSystems(ctx, describeFsInput)
