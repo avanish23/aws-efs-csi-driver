@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	efs "github.com/aws/aws-sdk-go-v2/service/efs"
+	types "github.com/aws/aws-sdk-go-v2/service/efs/types"
 	gomock "github.com/golang/mock/gomock"
 	cloud "github.com/kubernetes-sigs/aws-efs-csi-driver/pkg/cloud"
 )
@@ -136,6 +137,26 @@ func (mr *MockEfsMockRecorder) DescribeMountTargets(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeMountTargets", reflect.TypeOf((*MockEfs)(nil).DescribeMountTargets), varargs...)
 }
 
+// ListTagsForResource mocks base method.
+func (m *MockEfs) ListTagsForResource(arg0 context.Context, arg1 *efs.ListTagsForResourceInput, arg2 ...func(*efs.Options)) (*efs.ListTagsForResourceOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListTagsForResource", varargs...)
+	ret0, _ := ret[0].(*efs.ListTagsForResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTagsForResource indicates an expected call of ListTagsForResource.
+func (mr *MockEfsMockRecorder) ListTagsForResource(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForResource", reflect.TypeOf((*MockEfs)(nil).ListTagsForResource), varargs...)
+}
+
 // MockCloud is a mock of Cloud interface.
 type MockCloud struct {
 	ctrl     *gomock.Controller
@@ -219,10 +240,10 @@ func (mr *MockCloudMockRecorder) DescribeFileSystemById(ctx, fileSystemId interf
 }
 
 // DescribeFileSystemByToken mocks base method.
-func (m *MockCloud) DescribeFileSystemByToken(ctx context.Context, creationToken string) (*cloud.FileSystem, error) {
+func (m *MockCloud) DescribeFileSystemByToken(ctx context.Context, creationToken string) ([]*cloud.FileSystem, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeFileSystemByToken", ctx, creationToken)
-	ret0, _ := ret[0].(*cloud.FileSystem)
+	ret0, _ := ret[0].([]*cloud.FileSystem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -290,4 +311,19 @@ func (m *MockCloud) ListAccessPoints(ctx context.Context, fileSystemId string) (
 func (mr *MockCloudMockRecorder) ListAccessPoints(ctx, fileSystemId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccessPoints", reflect.TypeOf((*MockCloud)(nil).ListAccessPoints), ctx, fileSystemId)
+}
+
+// ListTagsForFileSystem mocks base method.
+func (m *MockCloud) ListTagsForFileSystem(ctx context.Context, fileSystemArn string) ([]types.Tag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagsForFileSystem", ctx, fileSystemArn)
+	ret0, _ := ret[0].([]types.Tag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTagsForFileSystem indicates an expected call of ListTagsForFileSystem.
+func (mr *MockCloudMockRecorder) ListTagsForFileSystem(ctx, fileSystemArn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForFileSystem", reflect.TypeOf((*MockCloud)(nil).ListTagsForFileSystem), ctx, fileSystemArn)
 }

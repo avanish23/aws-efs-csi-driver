@@ -3,6 +3,8 @@ package cloud
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/efs/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"math/rand"
 	"time"
 )
@@ -12,6 +14,7 @@ type FakeCloudProvider struct {
 	fileSystems  map[string]*FileSystem
 	accessPoints map[string]*AccessPoint
 	mountTargets map[string]*MountTarget
+	tags         map[string][]types.Tag
 }
 
 func NewFakeCloudProvider() *FakeCloudProvider {
@@ -20,6 +23,7 @@ func NewFakeCloudProvider() *FakeCloudProvider {
 		fileSystems:  make(map[string]*FileSystem),
 		accessPoints: make(map[string]*AccessPoint),
 		mountTargets: make(map[string]*MountTarget),
+		tags:         make(map[string][]types.Tag),
 	}
 }
 
@@ -90,13 +94,23 @@ func (c *FakeCloudProvider) DescribeFileSystemById(ctx context.Context, fileSyst
 	return fs, nil
 }
 
-func (c *FakeCloudProvider) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fileSystem *FileSystem, err error) {
+func (c *FakeCloudProvider) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fileSystem []*FileSystem, err error) {
+	var efsList = make([]*FileSystem, 0)
 	if fs, ok := c.fileSystems[creationToken]; ok {
-		return fs, nil
+		efsList = append(efsList, fs)
+		return efsList, nil
+	}
+
+	tags := []types.Tag{
+		{
+			Key:   aws.String("Environment"),
+			Value: aws.String("Production"),
+		},
 	}
 
 	fs := &FileSystem{
-		FileSystemId: creationToken,
+		FileSystemId:  creationToken,
+		FileSystemArn: "arn:aws:elasticfilesystem:us-west-2:xxxx:file-system/fs-xxxx",
 	}
 	c.fileSystems[creationToken] = fs
 
@@ -107,8 +121,10 @@ func (c *FakeCloudProvider) DescribeFileSystemByToken(ctx context.Context, creat
 		IPAddress:     "127.0.0.1",
 	}
 
+	c.tags[fs.FileSystemArn] = tags
 	c.mountTargets[creationToken] = mt
-	return fs, nil
+	efsList = append(efsList, c.fileSystems[creationToken])
+	return efsList, nil
 }
 
 func (c *FakeCloudProvider) DescribeMountTargets(ctx context.Context, fileSystemId, az string) (mountTarget *MountTarget, err error) {
@@ -132,4 +148,11 @@ func (c *FakeCloudProvider) ListAccessPoints(ctx context.Context, fileSystemId s
 		c.accessPoints[fileSystemId],
 	}
 	return accessPoints, nil
+}
+
+func (c *FakeCloudProvider) ListTagsForFileSystem(ctx context.Context, fileSystemArn string) ([]types.Tag, error) {
+	if tags, ok := c.tags[fileSystemArn]; ok {
+		return tags, nil
+	}
+	return []types.Tag{}, ErrNotFound
 }

@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
 	"os"
 	"path"
 	"sort"
@@ -161,13 +162,13 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}
 		accessPointsOptions.FileSystemId = value
 	} else {
-		var discovery FileSystemDiscovery
+		var discovery *FileSystemDiscovery
 		if value, ok := volumeParams[FsDiscovery]; ok {
 			json.Unmarshal([]byte(value), &discovery)
 		} else {
 			return nil, status.Errorf(codes.InvalidArgument, "Both parameters %v and %v missing", FsId, FsDiscovery)
 		}
-		fs, err := localCloud.DescribeFileSystemByToken(ctx, discovery.CreationToken)
+		FsId, err := discoverVolume(ctx, localCloud, discovery)
 		if err != nil {
 			if err == cloud.ErrAccessDenied {
 				return nil, status.Errorf(codes.Unauthenticated, "Access Denied. Please ensure you have the right AWS permissions: %v", err)
@@ -177,7 +178,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			}
 			return nil, status.Errorf(codes.Internal, "Failed to fetch Access Points or Describe File System: %v", err)
 		}
-		accessPointsOptions.FileSystemId = fs.FileSystemId
+		accessPointsOptions.FileSystemId = *FsId
 	}
 
 	localCloud, roleArn, crossAccountDNSEnabled, err = getCloud(req.GetSecrets(), d)
@@ -670,17 +671,45 @@ func get64LenHash(text string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func discoverVolume(ctx context.Context, localCloud cloud.Cloud, discovery *FileSystemDiscovery) (string, error) {
-	fs, err := localCloud.DescribeFileSystemByToken(ctx, discovery.CreationToken)
+func discoverVolume(ctx context.Context, localCloud cloud.Cloud, discovery *FileSystemDiscovery) (*string, error) {
+	efs, err := localCloud.DescribeFileSystemByToken(ctx, discovery.CreationToken)
 	if err != nil {
 		if err == cloud.ErrAccessDenied {
-			return "", status.Errorf(codes.Unauthenticated, "Access Denied. Please ensure you have the right AWS permissions: %v", err)
+			return nil, status.Errorf(codes.Unauthenticated, "Access Denied. Please ensure you have the right AWS permissions: %v", err)
 		}
 		if err == cloud.ErrNotFound {
-			return "", status.Errorf(codes.InvalidArgument, "File System does not exist: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "File System does not exist: %v", err)
 		}
-		return "", status.Errorf(codes.Internal, "Failed to fetch Access Points or Describe File System: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch Access Points or Describe File System: %v", err)
 	}
-
-	return fs.FileSystemId, nil
+	res := make([]string, 0)
+	for _, fs := range efs {
+		var tags = make(map[string]string)
+		tagsList, err := localCloud.ListTagsForFileSystem(ctx, fs.FileSystemArn)
+		if err != nil {
+			if err == cloud.ErrAccessDenied {
+				return nil, status.Errorf(codes.Unauthenticated, "Access Denied. Please ensure you have the right AWS permissions: %v", err)
+			}
+			if err == cloud.ErrNotFound {
+				return nil, status.Errorf(codes.InvalidArgument, "File System does not exist: %v", err)
+			}
+			return nil, status.Errorf(codes.Internal, "Failed to fetch Tags for File System: %v", err)
+		}
+		for _, tag := range tagsList {
+			tags[*tag.Key] = *tag.Value
+		}
+		foundAllTags := true
+		for k, v := range discovery.Tags {
+			if value, exists := tags[k]; !exists || value != v {
+				foundAllTags = false
+			}
+		}
+		if foundAllTags {
+			res = append(res, fs.FileSystemId)
+		}
+	}
+	if len(res) != 1 {
+		return nil, fmt.Errorf("Discover volume failed. Expected exactly 1 file system in DescribeFileSystem result. However, recevied %d file systems", len(res))
+	}
+	return aws.String(res[0]), nil
 }

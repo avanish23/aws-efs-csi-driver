@@ -51,7 +51,8 @@ var (
 )
 
 type FileSystem struct {
-	FileSystemId string
+	FileSystemId  string
+	FileSystemArn string
 }
 
 type AccessPoint struct {
@@ -96,6 +97,7 @@ type Efs interface {
 	DescribeAccessPoints(context.Context, *efs.DescribeAccessPointsInput, ...func(*efs.Options)) (*efs.DescribeAccessPointsOutput, error)
 	DescribeFileSystems(context.Context, *efs.DescribeFileSystemsInput, ...func(*efs.Options)) (*efs.DescribeFileSystemsOutput, error)
 	DescribeMountTargets(context.Context, *efs.DescribeMountTargetsInput, ...func(*efs.Options)) (*efs.DescribeMountTargetsOutput, error)
+	ListTagsForResource(context.Context, *efs.ListTagsForResourceInput, ...func(*efs.Options)) (*efs.ListTagsForResourceOutput, error)
 }
 
 type Cloud interface {
@@ -106,8 +108,9 @@ type Cloud interface {
 	FindAccessPointByClientToken(ctx context.Context, clientToken, fileSystemId string) (accessPoint *AccessPoint, err error)
 	ListAccessPoints(ctx context.Context, fileSystemId string) (accessPoints []*AccessPoint, err error)
 	DescribeFileSystemById(ctx context.Context, fileSystemId string) (fs *FileSystem, err error)
-	DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs *FileSystem, err error)
+	DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs []*FileSystem, err error)
 	DescribeMountTargets(ctx context.Context, fileSystemId, az string) (fs *MountTarget, err error)
+	ListTagsForFileSystem(ctx context.Context, fileSystemArn string) (tags []types.Tag, err error)
 }
 
 type cloud struct {
@@ -322,7 +325,7 @@ func (c *cloud) ListAccessPoints(ctx context.Context, fileSystemId string) (acce
 
 	return
 }
-func (c *cloud) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs *FileSystem, err error) {
+func (c *cloud) DescribeFileSystemByToken(ctx context.Context, creationToken string) (fs []*FileSystem, err error) {
 	describeFsInput := &efs.DescribeFileSystemsInput{FileSystemId: &creationToken}
 	klog.V(5).Infof("Calling DescribeFileSystems with input: %+v", *describeFsInput)
 	res, err := c.efs.DescribeFileSystems(ctx, describeFsInput)
@@ -336,13 +339,14 @@ func (c *cloud) DescribeFileSystemByToken(ctx context.Context, creationToken str
 		return nil, fmt.Errorf("Describe File System failed: %v", err)
 	}
 
-	fileSystems := res.FileSystems
-	if len(fileSystems) == 0 || len(fileSystems) > 1 {
-		return nil, fmt.Errorf("DescribeFileSystem failed. Expected exactly 1 file system in DescribeFileSystem result. However, recevied %d file systems", len(fileSystems))
+	var efsList = make([]*FileSystem, 0)
+	for _, fileSystem := range res.FileSystems {
+		efsList = append(efsList, &FileSystem{
+			FileSystemId:  *fileSystem.FileSystemId,
+			FileSystemArn: *fileSystem.FileSystemArn,
+		})
 	}
-	return &FileSystem{
-		FileSystemId: *res.FileSystems[0].FileSystemId,
-	}, nil
+	return efsList, nil
 }
 
 func (c *cloud) DescribeFileSystemById(ctx context.Context, fileSystemId string) (fs *FileSystem, err error) {
@@ -412,6 +416,23 @@ func (c *cloud) DescribeMountTargets(ctx context.Context, fileSystemId, azName s
 		MountTargetId: *mountTarget.MountTargetId,
 		IPAddress:     *mountTarget.IpAddress,
 	}, nil
+}
+
+func (c *cloud) ListTagsForFileSystem(ctx context.Context, fileSystemArn string) ([]types.Tag, error) {
+	listTagsInput := &efs.ListTagsForResourceInput{ResourceId: aws.String(fileSystemArn)}
+	klog.V(5).Infof("Calling ListTagsForFileSystem with input: %+v", *listTagsInput)
+	res, err := c.efs.ListTagsForResource(ctx, listTagsInput)
+	if err != nil {
+		if isAccessDenied(err) {
+			return nil, ErrAccessDenied
+		}
+		if isFileSystemNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("List Tags for FileSystem failed: %v", err)
+	}
+	tagsList := res.Tags
+	return tagsList, nil
 }
 
 func isFileSystemNotFound(err error) bool {

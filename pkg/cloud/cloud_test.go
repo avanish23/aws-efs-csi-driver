@@ -848,7 +848,7 @@ func TestDescribeFileSystem(t *testing.T) {
 
 				ctx := context.Background()
 				mockEfs.EXPECT().DescribeFileSystems(gomock.Eq(ctx), gomock.Any()).Return(output, nil)
-				_, err := c.DescribeFileSystem(ctx, fsId)
+				_, err := c.DescribeFileSystemById(ctx, fsId)
 				if err == nil {
 					t.Fatalf("DescribeFileSystem did not fail")
 				}
