@@ -785,7 +785,7 @@ func TestDescribeFileSystem(t *testing.T) {
 
 				ctx := context.Background()
 				mockEfs.EXPECT().DescribeFileSystems(gomock.Eq(ctx), gomock.Any()).Return(output, nil)
-				res, err := c.DescribeFileSystem(ctx, fsId)
+				res, err := c.DescribeFileSystemById(ctx, fsId)
 				if err != nil {
 					t.Fatalf("Describe File System failed: %v", err)
 				}
@@ -813,7 +813,7 @@ func TestDescribeFileSystem(t *testing.T) {
 
 				ctx := context.Background()
 				mockEfs.EXPECT().DescribeFileSystems(gomock.Eq(ctx), gomock.Any()).Return(output, nil)
-				_, err := c.DescribeFileSystem(ctx, fsId)
+				_, err := c.DescribeFileSystemById(ctx, fsId)
 				if err == nil {
 					t.Fatalf("DescribeFileSystem did not fail")
 				}
@@ -867,7 +867,7 @@ func TestDescribeFileSystem(t *testing.T) {
 					&types.FileSystemNotFound{
 						Message: aws.String("File System not found"),
 					})
-				_, err := c.DescribeFileSystem(ctx, fsId)
+				_, err := c.DescribeFileSystemById(ctx, fsId)
 				if err == nil {
 					t.Fatalf("DescribeFileSystem did not fail")
 				}
@@ -890,7 +890,7 @@ func TestDescribeFileSystem(t *testing.T) {
 						Code:    AccessDeniedException,
 						Message: "Access Denied",
 					})
-				_, err := c.DescribeFileSystem(ctx, fsId)
+				_, err := c.DescribeFileSystemById(ctx, fsId)
 				if err == nil {
 					t.Fatalf("DescribeFileSystem did not fail")
 				}
@@ -909,7 +909,7 @@ func TestDescribeFileSystem(t *testing.T) {
 
 				ctx := context.Background()
 				mockEfs.EXPECT().DescribeFileSystems(gomock.Eq(ctx), gomock.Any()).Return(nil, errors.New("DescribeFileSystem failed"))
-				_, err := c.DescribeFileSystem(ctx, fsId)
+				_, err := c.DescribeFileSystemById(ctx, fsId)
 				if err == nil {
 					t.Fatalf("DescribeFileSystem did not fail")
 				}
